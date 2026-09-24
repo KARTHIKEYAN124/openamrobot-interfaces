@@ -9,7 +9,7 @@ stage=prerequisites
 finish() {
   result=$?
   if [ "$result" -eq 0 ]; then
-    echo "PASS: build, generated interfaces, and clean-workspace consumer" | tee "$run/result.txt"
+    echo "PASS: build, generated interfaces, clean consumer, message exchange, and reverted-interface rejection" | tee "$run/result.txt"
   else
     echo "FAIL: $stage (exit $result)" | tee "$run/result.txt"
   fi
@@ -68,3 +68,60 @@ clean_bash -c '
   source install/local_setup.bash
   ros2 run interface_install_consumer verify_installed_interfaces
 ' verify "$run"
+
+stage=navigation-message-exchange
+clean_bash -c '
+  source /opt/ros/jazzy/setup.bash
+  source "$1/underlay/local_setup.bash"
+  export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+  export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+  timeout 45s python3 "$2/tests/navigation_exchange.py" \
+    --expected-prefix "$1/underlay/openamr_nav_msgs"
+' verify "$run" "$root" | tee "$run/navigation-exchange.log"
+
+stage=reverted-interface-build
+mkdir -p "$run/reverted/src"
+cp -a "$root/ros2/openamr_nav_msgs" "$run/reverted/src/"
+python3 - "$run/reverted/src/openamr_nav_msgs/msg/NavigationStatus.msg" "$run/reverted-interface.patch" <<'PY'
+import difflib
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+lines = path.read_text().splitlines(keepends=True)
+removed = [line for line in lines if line.split("#", 1)[0].split() == ["string", "thresholds_id"]]
+if len(removed) != 1:
+    raise SystemExit("FAIL: reverted-interface fixture requires exactly one thresholds_id field")
+reverted = [line for line in lines if line not in removed]
+path.write_text("".join(reverted))
+Path(sys.argv[2]).write_text("".join(difflib.unified_diff(
+    lines, reverted, fromfile="current/NavigationStatus.msg", tofile="reverted/NavigationStatus.msg"
+)))
+print("Fixture: removed NavigationStatus.thresholds_id from temporary source only")
+PY
+clean_bash -c '
+  source /opt/ros/jazzy/setup.bash
+  cd "$1/reverted"
+  colcon build --base-paths src --event-handlers console_direct+
+' verify "$run"
+
+stage=reverted-interface-consumer
+set +e
+clean_bash -c '
+  source /opt/ros/jazzy/setup.bash
+  source "$1/reverted/install/local_setup.bash"
+  export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+  export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+  timeout 45s python3 "$2/tests/navigation_exchange.py" \
+    --expected-prefix "$1/reverted/install/openamr_nav_msgs"
+' verify "$run" "$root" > "$run/reverted-consumer.log" 2>&1
+consumer_status=$?
+set -e
+printf 'Consumer exit: %s\n' "$consumer_status" >> "$run/reverted-consumer.log"
+cat "$run/reverted-consumer.log"
+if [ "$consumer_status" -ne 42 ] || ! grep -Fxq \
+  'CONTRACT_MISMATCH: NavigationStatus.thresholds_id expected string' "$run/reverted-consumer.log"; then
+  echo "FAIL: reverted consumer must reject the missing field with exit 42; got $consumer_status"
+  exit 1
+fi
+echo 'PASS: reverted interface rejected by unchanged consumer (expected exit 42)'
