@@ -1,34 +1,92 @@
-# ROS 2 Jazzy build gate
+# ROS 2 Jazzy verification
 
-The `ROS 2 Jazzy` workflow runs on pull requests and pushes to `main`, on
-Ubuntu 24.04 in the official `ros:jazzy-ros-base` container. It resolves
-dependencies from the manifests under `ros2/` using rosdep, builds all packages
-with colcon, sources the install, and checks every source `.msg`, `.srv`, and
-`.action` definition using `ros2 interface show`, Python class loading, and
-generated native Python type-support loading. New packages, including the
-navigation messages, are discovered automatically. No robot is required.
+From a checkout on Ubuntu 24.04 with ROS 2 Jazzy installed, run:
 
-The required result is **quality/build** passing. A dependency,
-build, lookup, or import failure fails the job; discovering no interfaces also
-fails. No tests are skipped or failures ignored. The Actions log contains the
-dependency/build output and a `PASS` line per interface. The
-`ros2-jazzy-evidence` artifact contains colcon's `log/` directory and
-`generated-interfaces.log` when those stages have run. On an earlier failure,
-consult the failed step's Actions log; an artifact alone is not a passing result.
+```bash
+bash tools/verify.sh
+```
 
-Fork pull requests use the ordinary `pull_request` event with read-only
-repository permissions and no secrets. A maintainer may need to approve the
-workflow run according to the repository's GitHub Actions settings. No
-`pull_request_target` execution is used.
+The command works from any directory, returns nonzero on any failed stage,
+and is the same command used by the `quality/build` job in the `ROS 2 Jazzy`
+workflow. It requires no robot and does not publish messages or actuate hardware.
 
-For manual reproduction in a fresh Ubuntu 24.04 / ROS 2 Jazzy environment,
-run the three workflow `run` blocks in order from the repository root (the
-dependency installation block requires root privileges). The workflow is the
-canonical command source for this initial gate.
+## Prerequisites
 
-This is the first step of [Issue #6](https://github.com/openAMRobot/openamrobot-interfaces/issues/6),
-not its complete verification suite. Lint/schema validation, compatibility and
-version checks, fake publisher/consumer tests (including reverted-interface
-failures), consumption from a separate clean workspace, and a reusable local/CI
-verification command remain follow-up work. This gate does not claim those
-checks pass and does not alter interface contracts.
+Install ROS 2 Jazzy using the [official Ubuntu installation instructions](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html).
+Install verification tools and manifest dependencies once, from the checkout:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y python3-colcon-common-extensions python3-rosdep
+# Only on machines where rosdep has not been initialized:
+sudo rosdep init
+rosdep update --rosdistro jazzy
+rosdep install --from-paths ros2 --ignore-src --rosdistro jazzy -y
+```
+
+Verification runs `rosdep check` and fails if dependencies are missing; it does
+not silently install software or require sudo. CI provisions dependencies first
+in the official `ros:jazzy-ros-base` container. These prerequisites are separate
+from the checks, which always run through `tools/verify.sh`.
+
+## What is checked
+
+1. Check dependencies in a fresh shell that does not inherit the developer's
+   ROS overlays, Python paths, CMake prefixes, or shell startup files.
+2. Copy all interface packages under `ros2/` into a new workspace and build with
+   colcon, using only `/opt/ros/jazzy` as the underlay. No cached build or symlink
+   install is used.
+3. Copy the installed packages to a new prefix and rename the original producer
+   workspace. Its recorded source, build, and install paths no longer exist.
+4. Source ROS Jazzy and the relocated install's `local_setup.bash`. Check every
+   source `.msg`, `.srv`, and `.action` definition through `ros2 interface show`,
+   Python class loading, and generated native Python type-support loading.
+   Discovering no interfaces fails.
+5. Build the standalone `tests/install_consumer` package in another new
+   workspace and clean shell. It finds both `openamr_nav_msgs` and
+   `openamr_ui_msgs` through their installed CMake exports, compiles representative
+   navigation/message/action headers, links generated C++ type support, and runs
+   the resulting executable to check runtime loading.
+
+The consumer has no source/build include paths to the interface packages. The
+retired producer files are retained for diagnosis; this is environment and path
+isolation, not an OS filesystem security boundary. This verifies a freshly built,
+relocated install, not a released binary artifact or a pinned release manifest.
+
+## Evidence and CI
+
+Each invocation creates a new ignored `.verification/run.*` directory containing:
+
+- `verification.log`: full command output, including the consumer execution;
+- `result.txt`: overall PASS or the failing stage and exit code;
+- `generated-interfaces.log`: generated-interface output, when reached;
+- `producer-retired/log/` (or `producer/log/` on an earlier failure): colcon build logs;
+- `consumer/log/`: downstream build logs, when reached.
+
+CI uploads these files as `ros2-jazzy-evidence`, including available partial
+evidence on failure. The build and install trees remain local and are not uploaded.
+An artifact alone does not mean verification passed: require a successful
+`quality/build` job and a PASS in `result.txt`. Remove old `.verification/run.*`
+directories manually when their diagnostic workspaces are no longer needed.
+
+The workflow runs on pull requests and pushes to `main`. Fork pull requests use
+the ordinary `pull_request` event with read-only permissions and no secrets;
+maintainer approval may be required by GitHub's Actions policy.
+
+## Troubleshooting
+
+- **Prerequisites fail:** ensure `/opt/ros/jazzy/setup.bash` exists, initialize and
+  update rosdep, and install the dependencies listed by `rosdep check`.
+- **A developer overlay used to make the build pass:** verification deliberately
+  ignores it. Declare and install the missing dependency instead.
+- **Generated interfaces or consumer fail:** inspect the failing stage in
+  `verification.log` and the corresponding colcon logs. Check exported runtime
+  dependencies and installed headers/libraries; do not add producer source or
+  build paths to the consumer.
+
+## Remaining Issue #6 scope
+
+This extends the first build gate in [Issue #6](https://github.com/openAMRobot/openamrobot-interfaces/issues/6).
+Lint/schema validation, compatibility/version checks, fake publisher/consumer
+message exchange, and a reverted-interface regression test remain unimplemented.
+This command does not report those checks as passing or claim release readiness.
