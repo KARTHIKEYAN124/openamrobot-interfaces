@@ -32,41 +32,8 @@ jobs:
           rosdep update --rosdistro jazzy
           rosdep install --from-paths ros2 --ignore-src --rosdistro jazzy -y
 
-      - name: Build interface packages
-        run: |
-          set -eo pipefail
-          source /opt/ros/jazzy/setup.bash
-          colcon build --base-paths ros2 --event-handlers console_direct+
-
-      - name: Verify generated interfaces
-        run: |
-          set -eo pipefail
-          source /opt/ros/jazzy/setup.bash
-          source install/setup.bash
-          python3 - <<'PY' | tee generated-interfaces.log
-          from pathlib import Path
-          import subprocess
-          import xml.etree.ElementTree as ET
-
-          from rosidl_generator_py import import_type_support
-          from rosidl_runtime_py.utilities import get_action, get_message, get_service
-
-          loaders = {"msg": get_message, "srv": get_service, "action": get_action}
-          count = 0
-          for manifest in sorted(Path("ros2").rglob("package.xml")):
-              package = ET.parse(manifest).getroot().findtext("name")
-              for kind, load in loaders.items():
-                  for definition in sorted((manifest.parent / kind).glob(f"*.{kind}")):
-                      interface = f"{package}/{kind}/{definition.stem}"
-                      subprocess.run(["ros2", "interface", "show", interface], check=True)
-                      load(interface)
-                      import_type_support(package)
-                      print(f"PASS: {interface}", flush=True)
-                      count += 1
-          if count == 0:
-              raise SystemExit("FAIL: no interface definitions discovered")
-          print(f"PASS: {count} generated interfaces available", flush=True)
-          PY
+      - name: Verify interfaces and clean-workspace consumer
+        run: bash tools/verify.sh
 
       - name: Upload build evidence
         if: always()
@@ -74,6 +41,11 @@ jobs:
         with:
           name: ros2-jazzy-evidence
           path: |
-            log/
-            generated-interfaces.log
+            .verification/run.*/verification.log
+            .verification/run.*/result.txt
+            .verification/run.*/generated-interfaces.log
+            .verification/run.*/producer-retired/log/
+            .verification/run.*/producer/log/
+            .verification/run.*/consumer/log/
+          include-hidden-files: true
           if-no-files-found: warn

@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>interface_install_consumer</name>
+  <version>0.0.0</version>
+  <description>Verification-only consumer of installed OpenAMRobot interfaces.</description>
+  <maintainer email="info@botshare.ai">Botshare LTD</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>openamr_nav_msgs</depend>
+  <depend>openamr_ui_msgs</depend>
+  <depend>rosidl_typesupport_cpp</depend>
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

@@ -9,6 +9,12 @@ Current maturity level: Experimental
 ROS 2 Jazzy pull-request and main-branch builds are described in
 [Build verification](docs/verification.md), including checks and evidence.
 
+After installing the documented prerequisites, run the same verification as CI:
+
+```bash
+bash tools/verify.sh
+```
+
 ## Purpose
 
 This repository defines interface contracts shared across the OpenAMRobot ecosystem, including:
