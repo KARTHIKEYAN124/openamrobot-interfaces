@@ -36,6 +36,13 @@ clean_bash -c '
   rosdep check --from-paths "$1/ros2" --ignore-src --rosdistro jazzy
 ' verify "$root"
 
+stage=lint-and-schema
+clean_bash -c '
+  source /opt/ros/jazzy/setup.bash
+  python3 "$1/tools/lint_schemas.py" --root "$1" --report "$2/lint-schema.json"
+  python3 -m unittest discover -s "$1/tests" -p test_schema_validation.py -v
+' verify "$root" "$run" | tee "$run/lint-schema.log"
+
 stage=interface-build
 mkdir -p "$run/producer/src"
 cp -a "$root/ros2/." "$run/producer/src/"
