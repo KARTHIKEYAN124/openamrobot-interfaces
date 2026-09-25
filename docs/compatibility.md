@@ -26,6 +26,9 @@ accompany interface changes. Empty or missing current snapshots do not pass.
 - New enum/reason constants alone do not require a bump, per CONTRACT.md.
 - Existing navigation reason codes are append-only: removal, renumbering or
   reuse fails even with a contract bump.
+- The complete candidate reason registry must have unique numeric values,
+  including newly added reasons. Two new reasons sharing a code fail even when
+  the contract version increases or the baseline is being introduced.
 - Other packages require an increased `package.xml` version for type changes
   or changes to existing constants. This checks an increase, not a universal
   major/minor SemVer policy.

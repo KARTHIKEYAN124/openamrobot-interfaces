@@ -55,6 +55,25 @@ class CompatibilityTests(unittest.TestCase):
         self.nav()["msg/NavigationStatus"]["constants"]["msg/OTHER_REASON"] = {"type": "uint16", "value": 9001}
         self.assertTrue(self.errors())
 
+    def test_duplicate_new_reason_codes_rejected(self):
+        constants = self.nav()["msg/NavigationStatus"]["constants"]
+        constants["msg/NEW_REASON_A"] = {"type": "uint16", "value": 9005}
+        constants["msg/NEW_REASON_B"] = {"type": "uint16", "value": 9005}
+        for mode in ("unchanged_version", "bumped_version", "bootstrap"):
+            with self.subTest(mode=mode):
+                if mode == "bumped_version":
+                    self.bump()
+                before = self.after if mode == "bootstrap" else self.before
+                result = compare(before, self.after)
+                self.assertEqual(result["status"], "FAIL")
+                self.assertTrue(any("duplicate reason code 9005" in e for e in result["errors"]))
+
+    def test_distinct_new_reason_codes_allowed_without_bump(self):
+        constants = self.nav()["msg/NavigationStatus"]["constants"]
+        constants["msg/NEW_REASON_A"] = {"type": "uint16", "value": 9005}
+        constants["msg/NEW_REASON_B"] = {"type": "uint16", "value": 9006}
+        self.assertEqual(self.errors(), [])
+
     def test_contract_regression_rejected(self):
         self.nav()["msg/NavigationStatus"]["constants"]["msg/CONTRACT_VERSION"]["value"] = 0
         with self.assertRaises(ValueError):

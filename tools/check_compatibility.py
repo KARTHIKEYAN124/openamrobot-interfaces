@@ -75,6 +75,18 @@ def compare(before, after):
         raise ValueError("Expected Jazzy snapshots")
     if not before["packages"] or not after["packages"]:
         raise ValueError("Empty package snapshot")
+    candidate_nav = after["packages"].get("openamr_nav_msgs")
+    if candidate_nav is not None:
+        reasons = {}
+        for name, constant in candidate_nav["interfaces"]["msg/NavigationStatus"]["constants"].items():
+            # NavigationStatus's uint16 constants are reason codes, except its version.
+            if constant["type"] != "uint16" or name == "msg/CONTRACT_VERSION":
+                continue
+            code = constant["value"]
+            if code in reasons:
+                errors.append(f"{name}: duplicate reason code {code} (also {reasons[code]})")
+            else:
+                reasons[code] = name
     for name, old in before["packages"].items():
         if name not in after["packages"]:
             errors.append(f"{name}: removing a package requires a migration policy")
