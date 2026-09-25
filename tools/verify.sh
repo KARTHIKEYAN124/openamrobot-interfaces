@@ -65,7 +65,7 @@ clean_bash -c '
     --baseline "$2/compatibility/jazzy.json" --base-ref "$3" \
     --output "$1/interface-snapshot.json" --report "$1/compatibility.json"
   python3 "$2/tools/run_verification_tests.py" "$2/tests" test_compatibility.py
-' verify "$run" "$root" "${VERIFY_BASE_REF:-HEAD^}" | tee "$run/compatibility.log"
+' verify "$run" "$root" "${VERIFY_BASE_REF:-HEAD^}" 2>&1 | tee "$run/compatibility.log"
 
 stage=clean-consumer-build
 mkdir -p "$run/consumer/src"
