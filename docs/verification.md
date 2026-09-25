@@ -8,7 +8,8 @@ bash tools/verify.sh
 
 The command works from any directory, returns nonzero on any failed stage,
 and is the same command used by the `quality/build` job in the `ROS 2 Jazzy`
-workflow. It requires no robot and does not publish messages or actuate hardware.
+workflow. It requires no robot and never actuates hardware. Message tests publish
+only on a unique verification topic with discovery restricted to localhost.
 
 ## Prerequisites
 
@@ -47,11 +48,34 @@ from the checks, which always run through `tools/verify.sh`.
    `openamr_ui_msgs` through their installed CMake exports, compiles representative
    navigation/message/action headers, links generated C++ type support, and runs
    the resulting executable to check runtime loading.
+6. Start a fake publisher in a separate process, publish one navigation status,
+   and then start a late consumer. Require reliable, transient-local, depth-1
+   delivery and check the header, contract version, profile/threshold IDs,
+   health/readiness, reason arrays, and nested sensor values against explicit
+   expected values. Startup and receipt each have a 10-second deadline; the
+   whole test has an outer 45-second timeout and cleans up its publisher.
+7. Remove `NavigationStatus.thresholds_id` from a temporary copy of the source
+   and build that package in a separate workspace. Run the unchanged consumer
+   against only that install and ROS Jazzy. Require exit 42 and the exact
+   missing-field diagnostic. Success, timeouts, import errors, and failed builds
+   are failures of this verification stage, not acceptable negative results.
+
+The message test uses `rclpy` and Fast DDS from the Jazzy ROS base environment.
+It checks that package discovery resolves the intended install. The negative
+fixture simulates reverting a required field, not a historical Git commit or a
+general compatibility/version policy. It does not modify tracked message files.
+The consumer rejects the reverted definition in its contract preflight before
+starting message exchange. The positive run must complete real DDS exchange;
+neither missing dependencies nor test timeouts are skipped.
+Fixture values and consumer checks use the generated message constants. This
+tests message exchange, not independent constant-value/version enforcement.
+The preflight rejection does not establish old-producer/new-consumer compatibility.
 
 The consumer has no source/build include paths to the interface packages. The
 retired producer files are retained for diagnosis; this is environment and path
 isolation, not an OS filesystem security boundary. This verifies a freshly built,
 relocated install, not a released binary artifact or a pinned release manifest.
+It does not prove general ROS install relocatability.
 
 ## Evidence and CI
 
@@ -60,8 +84,12 @@ Each invocation creates a new ignored `.verification/run.*` directory containing
 - `verification.log`: full command output, including the consumer execution;
 - `result.txt`: overall PASS or the failing stage and exit code;
 - `generated-interfaces.log`: generated-interface output, when reached;
+- `navigation-exchange.log`: positive publisher/consumer result;
+- `reverted-consumer.log`: expected missing-field failure (exit 42);
+- `reverted-interface.patch`: exact temporary field-removal change;
 - `producer-retired/log/` (or `producer/log/` on an earlier failure): colcon build logs;
 - `consumer/log/`: downstream build logs, when reached.
+- `reverted/log/`: build logs for the temporary reverted interface.
 
 CI uploads these files as `ros2-jazzy-evidence`, including available partial
 evidence on failure. The build and install trees remain local and are not uploaded.
@@ -87,6 +115,5 @@ maintainer approval may be required by GitHub's Actions policy.
 ## Remaining Issue #6 scope
 
 This extends the first build gate in [Issue #6](https://github.com/openAMRobot/openamrobot-interfaces/issues/6).
-Lint/schema validation, compatibility/version checks, fake publisher/consumer
-message exchange, and a reverted-interface regression test remain unimplemented.
+Lint/schema validation and compatibility/version checks remain unimplemented.
 This command does not report those checks as passing or claim release readiness.

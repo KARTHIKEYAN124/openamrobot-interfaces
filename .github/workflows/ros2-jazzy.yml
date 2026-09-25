@@ -32,7 +32,7 @@ jobs:
           rosdep update --rosdistro jazzy
           rosdep install --from-paths ros2 --ignore-src --rosdistro jazzy -y
 
-      - name: Verify interfaces and clean-workspace consumer
+      - name: Verify interfaces and consumers
         run: bash tools/verify.sh
 
       - name: Upload build evidence
@@ -44,8 +44,12 @@ jobs:
             .verification/run.*/verification.log
             .verification/run.*/result.txt
             .verification/run.*/generated-interfaces.log
+            .verification/run.*/navigation-exchange.log
+            .verification/run.*/reverted-consumer.log
+            .verification/run.*/reverted-interface.patch
             .verification/run.*/producer-retired/log/
             .verification/run.*/producer/log/
             .verification/run.*/consumer/log/
+            .verification/run.*/reverted/log/
           include-hidden-files: true
           if-no-files-found: warn
