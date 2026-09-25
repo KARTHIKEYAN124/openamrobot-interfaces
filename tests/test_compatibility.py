@@ -57,7 +57,13 @@ class CompatibilityTests(unittest.TestCase):
 
     def test_contract_regression_rejected(self):
         self.nav()["msg/NavigationStatus"]["constants"]["msg/CONTRACT_VERSION"]["value"] = 0
-        self.assertTrue(self.errors())
+        with self.assertRaises(ValueError):
+            self.errors()
+
+    def test_contract_counter_type_cannot_change(self):
+        self.nav()["msg/NavigationStatus"]["constants"]["msg/CONTRACT_VERSION"] = {"type": "bool", "value": True}
+        with self.assertRaises(ValueError):
+            self.errors()
 
     def test_ui_change_requires_package_bump(self):
         ui = self.after["packages"]["openamr_ui_msgs"]

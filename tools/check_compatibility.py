@@ -60,7 +60,11 @@ def package_version(value):
 
 
 def contract_version(package):
-    return package["interfaces"]["msg/NavigationStatus"]["constants"]["msg/CONTRACT_VERSION"]["value"]
+    constant = package["interfaces"]["msg/NavigationStatus"]["constants"]["msg/CONTRACT_VERSION"]
+    value = constant["value"]
+    if constant["type"] != "uint16" or type(value) is not int or not 1 <= value <= 65535:
+        raise ValueError("CONTRACT_VERSION must be a positive uint16 constant")
+    return value
 
 
 def compare(before, after):
