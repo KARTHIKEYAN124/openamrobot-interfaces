@@ -40,7 +40,7 @@ stage=lint-and-schema
 clean_bash -c '
   source /opt/ros/jazzy/setup.bash
   python3 "$1/tools/lint_schemas.py" --root "$1" --report "$2/lint-schema.json"
-  python3 -m unittest discover -s "$1/tests" -p test_schema_validation.py -v
+  python3 "$1/tools/run_verification_tests.py" "$1/tests" test_schema_validation.py
 ' verify "$root" "$run" | tee "$run/lint-schema.log"
 
 stage=interface-build
