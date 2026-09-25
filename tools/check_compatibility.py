@@ -134,20 +134,23 @@ def main():
     if recorded != current:
         raise SystemExit("FAIL: checked-in snapshot differs from generated interfaces; regenerate it for review")
     root = args.source.resolve().parent
+    # The clean HOME intentionally excludes checkout's global safe.directory.
+    # Trust only the explicitly supplied repository, for these read-only calls.
+    git = ["git", "-c", f"safe.directory={root}"]
     ref = subprocess.check_output(
-        ["git", "rev-parse", "--verify", f"{args.base_ref}^{{commit}}"], cwd=root, text=True
+        git + ["rev-parse", "--verify", f"{args.base_ref}^{{commit}}"], cwd=root, text=True
     ).strip()
     relative = args.baseline.resolve().relative_to(root).as_posix()
-    exists = subprocess.run(["git", "cat-file", "-e", f"{ref}:{relative}"], cwd=root,
+    exists = subprocess.run(git + ["cat-file", "-e", f"{ref}:{relative}"], cwd=root,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     if exists.returncode:
         # Bootstrap is allowed only while introducing this gate, with no ROS changes.
-        subprocess.run(["git", "diff", "--exit-code", ref, "--", "ros2"], cwd=root, check=True)
+        subprocess.run(git + ["diff", "--exit-code", ref, "--", "ros2"], cwd=root, check=True)
         previous = recorded
         print("Initial baseline: interface sources unchanged from comparison commit")
     else:
         previous = json.loads(subprocess.check_output(
-            ["git", "show", f"{ref}:{relative}"], cwd=root, text=True
+            git + ["show", f"{ref}:{relative}"], cwd=root, text=True
         ))
     result = compare(previous, current)
     result["base_commit"] = ref
