@@ -64,7 +64,7 @@ clean_bash -c '
   python3 "$2/tools/check_compatibility.py" --source "$2/ros2" \
     --baseline "$2/compatibility/jazzy.json" --base-ref "$3" \
     --output "$1/interface-snapshot.json" --report "$1/compatibility.json"
-  python3 -m unittest discover -s "$2/tests" -p test_compatibility.py -v
+  python3 "$2/tools/run_verification_tests.py" "$2/tests" test_compatibility.py
 ' verify "$run" "$root" "${VERIFY_BASE_REF:-HEAD^}" | tee "$run/compatibility.log"
 
 stage=clean-consumer-build
