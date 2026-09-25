@@ -18,7 +18,8 @@ Install verification tools and manifest dependencies once, from the checkout:
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y python3-colcon-common-extensions python3-rosdep
+sudo apt-get install -y python3-colcon-common-extensions python3-rosdep \
+  ros-jazzy-rmw-fastrtps-cpp ros-jazzy-rmw-cyclonedds-cpp
 # Only on machines where rosdep has not been initialized:
 sudo rosdep init
 rosdep update --rosdistro jazzy
@@ -48,7 +49,8 @@ from the checks, which always run through `tools/verify.sh`.
    `openamr_ui_msgs` through their installed CMake exports, compiles representative
    navigation/message/action headers, links generated C++ type support, and runs
    the resulting executable to check runtime loading.
-6. Start a fake publisher in a separate process, publish one navigation status,
+6. For each of Fast DDS (`rmw_fastrtps_cpp`) and Cyclone DDS
+   (`rmw_cyclonedds_cpp`), start a fake publisher in a separate process, publish one navigation status,
    and then start a late consumer. Require reliable, transient-local, depth-1
    delivery and check the header, contract version, profile/threshold IDs,
    health/readiness, reason arrays, and nested sensor values against explicit
@@ -60,7 +62,12 @@ from the checks, which always run through `tools/verify.sh`.
    missing-field diagnostic. Success, timeouts, import errors, and failed builds
    are failures of this verification stage, not acceptable negative results.
 
-The message test uses `rclpy` and Fast DDS from the Jazzy ROS base environment.
+The message test uses `rclpy` with both mandatory Jazzy middleware packages.
+The shared command passes each RMW into the isolated shell explicitly; caller
+RMW settings cannot override or skip either run. Missing middleware, timeouts
+and exchange failures fail the gate. This tests each middleware separately,
+not cross-middleware interoperability, a complete docking sequencer, or a
+physical robot.
 It checks that package discovery resolves the intended install. The negative
 fixture simulates reverting a required field, not a historical Git commit or a
 general compatibility/version policy. It does not modify tracked message files.
@@ -84,7 +91,8 @@ Each invocation creates a new ignored `.verification/run.*` directory containing
 - `verification.log`: full command output, including the consumer execution;
 - `result.txt`: overall PASS or the failing stage and exit code;
 - `generated-interfaces.log`: generated-interface output, when reached;
-- `navigation-exchange.log`: positive publisher/consumer result;
+- `navigation-exchange-rmw_fastrtps_cpp.log`: Fast DDS exchange and loaded RMW;
+- `navigation-exchange-rmw_cyclonedds_cpp.log`: Cyclone DDS exchange and loaded RMW;
 - `reverted-consumer.log`: expected missing-field failure (exit 42);
 - `reverted-interface.patch`: exact temporary field-removal change;
 - `producer-retired/log/` (or `producer/log/` on an earlier failure): colcon build logs;
@@ -111,6 +119,16 @@ maintainer approval may be required by GitHub's Actions policy.
   `verification.log` and the corresponding colcon logs. Check exported runtime
   dependencies and installed headers/libraries; do not add producer source or
   build paths to the consumer.
+
+## Checking failure detection
+
+In a disposable checkout, change only the publisher fixture assignment of
+`message.thresholds_id` in `tests/navigation_exchange.py` to a different string,
+leaving the consumer expectation unchanged. Run `bash tools/verify.sh`: it must
+exit nonzero with `FAIL: unexpected thresholds_id` in the exchange log and a
+failed middleware stage in `result.txt`. Restore the fixture before normal
+verification. This is a deliberately broken exchange, separate from the exact
+exit-42 reverted-field preflight test.
 
 ## Remaining Issue #6 scope
 

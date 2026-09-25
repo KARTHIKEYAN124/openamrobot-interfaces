@@ -25,7 +25,7 @@ jobs:
           set -eo pipefail
           source /opt/ros/jazzy/setup.bash
           apt-get update
-          apt-get install -y --no-install-recommends python3-colcon-common-extensions python3-rosdep
+          apt-get install -y --no-install-recommends python3-colcon-common-extensions python3-rosdep ros-jazzy-rmw-fastrtps-cpp ros-jazzy-rmw-cyclonedds-cpp
           if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then
             rosdep init
           fi
@@ -44,7 +44,7 @@ jobs:
             .verification/run.*/verification.log
             .verification/run.*/result.txt
             .verification/run.*/generated-interfaces.log
-            .verification/run.*/navigation-exchange.log
+            .verification/run.*/navigation-exchange-*.log
             .verification/run.*/reverted-consumer.log
             .verification/run.*/reverted-interface.patch
             .verification/run.*/producer-retired/log/
