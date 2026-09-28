@@ -34,31 +34,45 @@ from the checks, which always run through `tools/verify.sh`.
 
 1. Check dependencies in a fresh shell that does not inherit the developer's
    ROS overlays, Python paths, CMake prefixes, or shell startup files.
-2. Copy all interface packages under `ros2/` into a new workspace and build with
+2. Run [lint/schema validation](schema-validation.md): package metadata,
+   CMake lint, ROS definition parsing and registered JSON/YAML schema fixtures.
+   Run all 15 schema-validator regression tests. Absent domain schemas are
+   explicitly reported as `NOT_APPLICABLE`, with count zero and a reason;
+   this does not skip the validator regression suite.
+3. Copy all interface packages under `ros2/` into a new workspace and build with
    colcon, using only `/opt/ros/jazzy` as the underlay. No cached build or symlink
    install is used.
-3. Copy the installed packages to a new prefix and rename the original producer
+4. Copy the installed packages to a new prefix and rename the original producer
    workspace. Its recorded source, build, and install paths no longer exist.
-4. Source ROS Jazzy and the relocated install's `local_setup.bash`. Check every
+5. Source ROS Jazzy and the relocated install's `local_setup.bash`. Check every
    source `.msg`, `.srv`, and `.action` definition through `ros2 interface show`,
    Python class loading, and generated native Python type-support loading.
    Discovering no interfaces fails.
-5. Build the standalone `tests/install_consumer` package in another new
+6. Run [compatibility/version validation](compatibility.md): match generated
+   RIHS01 type hashes, constants and package versions against the committed
+   snapshot, then enforce version and reason-code rules against the Git base.
+   Run all 14 compatibility regression tests. CI supplies the PR base or
+   push-before SHA with full Git history; local runs use `VERIFY_BASE_REF`
+   (default `HEAD^`). Set it explicitly for a multi-commit branch.
+7. Build the standalone `tests/install_consumer` package in another new
    workspace and clean shell. It finds both `openamr_nav_msgs` and
    `openamr_ui_msgs` through their installed CMake exports, compiles representative
    navigation/message/action headers, links generated C++ type support, and runs
    the resulting executable to check runtime loading.
-6. Start a fake publisher in a separate process, publish one navigation status,
+8. Start a fake publisher in a separate process, publish one navigation status,
    and then start a late consumer. Require reliable, transient-local, depth-1
    delivery and check the header, contract version, profile/threshold IDs,
    health/readiness, reason arrays, and nested sensor values against explicit
    expected values. Startup and receipt each have a 10-second deadline; the
    whole test has an outer 45-second timeout and cleans up its publisher.
-7. Remove `NavigationStatus.thresholds_id` from a temporary copy of the source
+9. Remove `NavigationStatus.thresholds_id` from a temporary copy of the source
    and build that package in a separate workspace. Run the unchanged consumer
    against only that install and ROS Jazzy. Require exit 42 and the exact
    missing-field diagnostic. Success, timeouts, import errors, and failed builds
    are failures of this verification stage, not acceptable negative results.
+
+Both regression suites use the single `tools/run_verification_tests.py` runner;
+empty suites, skipped tests, errors and failures return nonzero.
 
 The message test uses `rclpy` and Fast DDS from the Jazzy ROS base environment.
 It checks that package discovery resolves the intended install. The negative
@@ -83,6 +97,11 @@ Each invocation creates a new ignored `.verification/run.*` directory containing
 
 - `verification.log`: full command output, including the consumer execution;
 - `result.txt`: overall PASS or the failing stage and exit code;
+- `lint-schema.json` and `lint-schema.log`: lint/schema results, applicability
+  and regression-test output;
+- `interface-snapshot.json`: generated interface snapshot;
+- `compatibility.json` and `compatibility.log`: baseline comparison, version
+  validation and regression-test output;
 - `generated-interfaces.log`: generated-interface output, when reached;
 - `navigation-exchange.log`: positive publisher/consumer result;
 - `reverted-consumer.log`: expected missing-field failure (exit 42);
